@@ -40,10 +40,16 @@ pipeline {
                     reuseNode true
                 }
             }
+            environment {
+                NETLIFY_AUTH_TOKEN = credentials('netlify-auth-token')
+                NETLIFY_SITE_ID = credentials('netlify-site-id')
+            }
             steps {
                 sh '''
-                    npm install -g netlify-cli
+                    npm install netlify-cli
                     node_modules/.bin/netlify --version
+                    node_modules/.bin/netlify status
+                    node_modules/.bin/netlify deploy --dir=build --prod
                 '''
             }
         }
