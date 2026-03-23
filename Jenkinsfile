@@ -1,6 +1,14 @@
 pipeline {
     agent any
     stages {
+        stage('Docker') {
+            steps {
+                sh '''
+                    docker --version
+                    docker build -t my-docker-image .
+                '''
+            }
+        }
         stage('Build') {
             agent {
                 docker {
@@ -36,7 +44,8 @@ pipeline {
         stage('Deploy') {
             agent {
                 docker {
-                    image 'node:22.14.0'
+                    // image 'node:22.14.0'
+                    image 'my-docker-image'
                     reuseNode true
                 }
             }
@@ -46,10 +55,15 @@ pipeline {
             }
             steps {
                 sh '''
-                    npm install netlify-cli
-                    node_modules/.bin/netlify --version
-                    node_modules/.bin/netlify status
-                    node_modules/.bin/netlify deploy --dir=build --prod
+                    # npm install netlify-cli
+                    # node_modules/.bin/netlify --version
+                    # node_modules/.bin/netlify status
+                    # node_modules/.bin/netlify deploy --dir=build --prod
+
+                    netlify --version
+                    echo "Site Id: $NETLIFY_SITE_ID"
+                    netlify status
+                    netlify deploy --dir=build --prod
                 '''
             }
         }
