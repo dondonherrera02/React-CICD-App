@@ -1,5 +1,11 @@
 pipeline {
     agent any
+
+    environment {
+        AWS_REGION = 'ca-central-1'          // change to your region
+        S3_BUCKET  = 'dh-react-app-2026'  // change to your bucket name
+    }
+
     stages {
         stage('Docker') {
             steps {
@@ -41,30 +47,26 @@ pipeline {
                 '''
             }
         }
-        stage('Deploy') {
+        stage('AWS') {
             agent {
                 docker {
-                    // image 'node:22.14.0'
-                    image 'my-docker-image'
+                    image 'amazon/aws-cli'
+                    args  '--entrypoint=""'
                     reuseNode true
                 }
             }
-            environment {
-                NETLIFY_AUTH_TOKEN = credentials('netlify-auth-token')
-                NETLIFY_SITE_ID = credentials('netlify-site-id')
-            }
             steps {
-                sh '''
-                    # npm install netlify-cli
-                    # node_modules/.bin/netlify --version
-                    # node_modules/.bin/netlify status
-                    # node_modules/.bin/netlify deploy --dir=build --prod
-
-                    netlify --version
-                    echo "Site Id: $NETLIFY_SITE_ID"
-                    netlify status
-                    netlify deploy --dir=build --prod
-                '''
+                withCredentials([usernamePassword(
+                    credentialsId: 'aws-s3-credentials',
+                    usernameVariable: 'AWS_ACCESS_KEY_ID',
+                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+                    sh '''
+                        aws s3 sync build/ s3://$S3_BUCKET \
+                            --region $AWS_REGION \
+                            --delete
+                    '''
+                }
             }
         }
     }
