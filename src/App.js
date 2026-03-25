@@ -2,7 +2,7 @@ import './App.css';
 
 function App() {
   return (
-    <h1>This is react cicd app - Netlify CICD - Updated! </h1>
+    <h1>This is react cicd app - AWS S3! </h1>
   );
 }
 
