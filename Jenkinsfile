@@ -45,13 +45,6 @@ pipeline {
         }
 
         stage('Docker Build & Push to ECR') {
-            agent {
-                docker {
-                    image 'amazon/aws-cli:latest'
-                    reuseNode true
-                    args '-u root --entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
-                }
-            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'aws-s3-credentials',
@@ -59,13 +52,15 @@ pipeline {
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     sh '''
-                        # Install docker CLI inside aws-cli container
-                        yum install -y docker
+                        # Use AWS CLI from Docker, pipe password directly to host docker login
+                        docker run --rm \
+                            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+                            amazon/aws-cli:latest \
+                            ecr get-login-password --region $AWS_REGION \
+                        | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-                        aws ecr get-login-password --region $AWS_REGION \
-                            | docker login --username AWS \
-                              --password-stdin $ECR_REGISTRY
-
+                        # Build and push using host Docker
                         docker build \
                             -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG \
                             -t $ECR_REGISTRY/$ECR_REPO:latest .
@@ -78,13 +73,6 @@ pipeline {
         }
 
         stage('Deploy to ECS') {
-            agent {
-                docker {
-                    image 'amazon/aws-cli:latest'
-                    reuseNode true
-                    args '-u root --entrypoint=""'
-                }
-            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'aws-s3-credentials',
@@ -95,17 +83,31 @@ pipeline {
                         sed -i "s|IMAGE_PLACEHOLDER|$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG|g" \
                             aws/task-definition.json
 
-                        aws ecs register-task-definition \
+                        # Run all AWS CLI commands via Docker container
+                        docker run --rm \
+                            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+                            -v $(pwd)/aws:/aws \
+                            amazon/aws-cli:latest \
+                            ecs register-task-definition \
                             --region $AWS_REGION \
-                            --cli-input-json file://aws/task-definition.json
+                            --cli-input-json file:///aws/task-definition.json
 
-                        TASK_REVISION=$(aws ecs describe-task-definition \
+                        TASK_REVISION=$(docker run --rm \
+                            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+                            amazon/aws-cli:latest \
+                            ecs describe-task-definition \
                             --region $AWS_REGION \
                             --task-definition $ECS_TASK_FAMILY \
                             --query 'taskDefinition.revision' \
                             --output text)
 
-                        aws ecs update-service \
+                        docker run --rm \
+                            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+                            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+                            amazon/aws-cli:latest \
+                            ecs update-service \
                             --region $AWS_REGION \
                             --cluster $ECS_CLUSTER \
                             --service $ECS_SERVICE \
