@@ -1,0 +1,21 @@
+{
+    "family": "my-react-task-definition",
+    "executionRoleArn": "arn:aws:iam::297601880443:role/ecsTaskExecutionRole",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "containerDefinitions": [
+        {
+            "name": "my-react-app-container",
+            "image": "nginx:1.27-alpine",
+            "portMappings": [
+                {
+                    "containerPort": 80,
+                    "protocol": "tcp"
+                }
+            ]
+        }
+    ]
+}
