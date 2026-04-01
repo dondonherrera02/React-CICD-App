@@ -45,6 +45,13 @@ pipeline {
         }
 
         stage('Docker Build & Push to ECR') {
+            agent {
+                docker {
+                    image 'amazon/aws-cli:latest'
+                    reuseNode true
+                    args '-u root --entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
+                }
+            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'aws-s3-credentials',
@@ -52,6 +59,9 @@ pipeline {
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
                     sh '''
+                        # Install docker CLI inside aws-cli container
+                        yum install -y docker
+
                         aws ecr get-login-password --region $AWS_REGION \
                             | docker login --username AWS \
                               --password-stdin $ECR_REGISTRY
@@ -68,6 +78,13 @@ pipeline {
         }
 
         stage('Deploy to ECS') {
+            agent {
+                docker {
+                    image 'amazon/aws-cli:latest'
+                    reuseNode true
+                    args '-u root --entrypoint=""'
+                }
+            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'aws-s3-credentials',
